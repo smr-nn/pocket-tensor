@@ -20,6 +20,9 @@
 #include "pt_embedding_layer.h"
 #include "pt_batch_normalization_layer.h"
 #include "pt_leaky_relu_layer.h"
+#include "pt_global_max_pooling_2d_layer.h"
+#include "pt_input_layer.h"
+
 
 namespace pt
 {
@@ -39,7 +42,9 @@ namespace
         Lstm = 10,
         Embedding = 11,
         BatchNormalization = 12,
-        LeakyRelu = 13
+        LeakyRelu = 13,
+        GlobalMaxPooling2D = 14,
+        Input = 15
     };
 }
 
@@ -104,6 +109,14 @@ std::unique_ptr<Layer> Layer::create(std::istream& stream)
 
     case LeakyRelu:
         layer = LeakyReluLayer::create(stream);
+        break;
+
+    case GlobalMaxPooling2D:
+        layer = GlobalMaxPooling2DLayer::create(stream);
+        break;
+
+    case Input:
+        layer = InputLayer::create(stream);
         break;
 
     default:

@@ -31,21 +31,14 @@ bool EmbeddingLayer::apply(LayerData& layerData) const
     const Tensor& in = layerData.in;
     const auto& iw = in.getDims();
 
-    if(iw.size() != 1)
-    {
-        PT_LOG_ERROR << "Input tensor dims count must be 1" <<
-                            " (input dims: " << VectorPrinter<std::size_t>{ iw } << ")" << std::endl;
-        return false;
-    }
-
     Tensor& out = layerData.out;
-    out.resize(iw[0], _weights.getDims()[1]);
+    out.resize(iw[0], iw[1], _weights.getDims()[1]);
 
     auto outIt = out.begin();
     auto wBegin = _weights.begin();
     auto inc = _weights.getDims()[1];
 
-    for(auto inIt = in.begin(), inEnd = in.begin() + long(iw[0]); inIt != inEnd; ++inIt)
+    for(auto inIt = in.begin(), inEnd = in.begin() + long(iw[0] * iw[1]); inIt != inEnd; ++inIt)
     {
         auto wIt = wBegin + int(*inIt * inc);
         std::memcpy(&*outIt, &*wIt, inc * sizeof(Tensor::Type));

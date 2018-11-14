@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4)
+cmake_minimum_required(VERSION 2.8)
 project(pocket-tensor)
 
 # Define sources:
@@ -9,6 +9,8 @@ set(SOURCES
     src/pt_dense_layer.cpp
     src/pt_conv_1d_layer.cpp
     src/pt_conv_2d_layer.cpp
+    src/pt_input_layer.cpp
+    src/pt_global_max_pooling_2d_layer.cpp
     src/pt_locally_connected_1d_layer.cpp
     src/pt_elu_layer.cpp
     src/pt_activation_layer.cpp

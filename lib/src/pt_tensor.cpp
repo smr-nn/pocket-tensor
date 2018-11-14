@@ -348,6 +348,25 @@ void Tensor::fill(Type value) noexcept
     std::fill(begin(), end(), value);
 }
 
+void Tensor::pad(std::size_t pad_height, std::size_t pad_width, FloatType value)
+{
+    Tensor result;
+    result.resize(_dims[0] + pad_height * 2, _dims[1] + pad_width * 2, _dims[2]);
+    result.fill(value);
+    for (std::size_t y = 0; y < _dims[0]; ++y)
+    {
+        for (std::size_t x = 0; x < _dims[1]; ++x)
+        {
+            for (std::size_t z = 0; z < _dims[2]; ++z)
+            {
+                result(y + pad_height, x + pad_width, z) =  _data[_dims[2] * (_dims[1] * y + x) + z];
+            }
+        }
+    }
+    _dims = std::move(result._dims);
+    _data = std::move(result._data);
+}
+
 void Tensor::flatten()
 {
     PT_ASSERT(isValid());
@@ -504,7 +523,7 @@ std::ostream& operator<<(std::ostream& stream, const Tensor& tensor)
 {
     const auto& dims = tensor.getDims();
     std::vector<std::size_t> steps(dims.size());
-    std::partial_sum(dims.rbegin(), dims.rend(), steps.rbegin(), std::multiplies<>());
+    std::partial_sum(dims.rbegin(), dims.rend(), steps.rbegin(), std::multiplies<std::size_t>());
 
     size_t count = 0;
 

@@ -228,6 +228,8 @@ public:
         return output;
     }
 
+    void pad(std::size_t pad_height, std::size_t pad_width, FloatType value);
+
     void eraseDummyDims() noexcept;
 
     void clear() noexcept;

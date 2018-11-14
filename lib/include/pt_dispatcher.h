@@ -9,6 +9,7 @@
 #define HIKE_THREAD_POOL_H
 
 #include <vector>
+#include <functional>
 #include <deque>
 #include <thread>
 #include <mutex>

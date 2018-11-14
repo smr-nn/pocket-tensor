@@ -13,6 +13,9 @@ LAYER_LSTM = 10
 LAYER_EMBEDDING = 11
 LAYER_BATCH_NORMALIZATION = 12
 LAYER_LEAKY_RELU = 13
+LAYER_GLOBAL_MAXPOOLING_2D = 14
+LAYER_INPUT = 15
+
 
 ACTIVATION_LINEAR = 1
 ACTIVATION_RELU = 2
@@ -156,6 +159,8 @@ def export_layer_maxpooling2d(f, layer):
     f.write(struct.pack('I', pool_size[0]))
     f.write(struct.pack('I', pool_size[1]))
 
+def export_layer_globalmaxpooling2d(f, layer):
+    f.write(struct.pack('I', LAYER_GLOBAL_MAXPOOLING_2D))
 
 def export_layer_lstm(f, layer):
     inner_activation = layer.get_config()['recurrent_activation']
@@ -209,11 +214,17 @@ def export_layer_embedding(f, layer):
     f.write(struct.pack('I', LAYER_EMBEDDING))
     write_tensor(f, weights, 2)
 
+def export_layer_input(f, layer):
+
+    f.write(struct.pack('I', LAYER_INPUT))
+
 
 def export_model(model, filename):
     with open(filename, 'wb') as f:
         model_layers = [
-            l for l in model.layers if type(l).__name__ not in ['Dropout']]
+            l for l in model.layers  if type(l).__name__ not in ['Dropout', 'Sequential']]
+        if type(model.layers[-1]).__name__ == 'Sequential':
+            model_layers += model.layers[-1].layers
         num_layers = len(model_layers)
         f.write(struct.pack('I', num_layers))
 
@@ -222,6 +233,8 @@ def export_model(model, filename):
 
             if layer_type == 'Dense':
                 export_layer_dense(f, layer)
+            elif layer_type == 'InputLayer':
+                export_layer_input(f, layer)
 
             elif layer_type == 'Conv1D':
                 export_layer_conv1d(f, layer)
@@ -233,7 +246,7 @@ def export_model(model, filename):
                 export_layer_conv2d(f, layer)
 
             elif layer_type == 'LocallyConnected1D':
-		export_layer_locally1d(f, layer)
+                export_layer_locally1d(f, layer)
 
             elif layer_type == 'Flatten':
                 f.write(struct.pack('I', LAYER_FLATTEN))
@@ -249,6 +262,9 @@ def export_model(model, filename):
 
             elif layer_type == 'MaxPooling2D':
                 export_layer_maxpooling2d(f, layer)
+
+            elif layer_type == 'GlobalMaxPooling2D':
+                export_layer_globalmaxpooling2d(f, layer)
 
             elif layer_type == 'LSTM':
                 export_layer_lstm(f, layer)

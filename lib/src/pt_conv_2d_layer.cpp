@@ -71,10 +71,10 @@ namespace
                 {
                     for(int x = 0; x != tx; ++x)
                     {
+
                         auto inIt = inBegin + y * inIncY + x * inIncX;
                         auto outIt = outBegin + y * tx * outInc + x * outInc;
                         auto bIt = bBegin;
-
                         for(auto wIt = wBegin, wEnd = wBegin + wSize; wIt != wEnd; wIt += wInc)
                         {
                             auto inIt2 = inIt;
@@ -141,7 +141,7 @@ std::unique_ptr<Conv2DLayer> Conv2DLayer::create(std::istream& stream)
 
 bool Conv2DLayer::apply(LayerData& layerData) const
 {
-    const Tensor& in = layerData.in;
+    Tensor& in = layerData.in;
     const auto& iw = in.getDims();
 
     if(iw.size() != 3)
@@ -163,6 +163,7 @@ bool Conv2DLayer::apply(LayerData& layerData) const
 
     auto offsetY = ww[1] - 1;
     auto offsetX = ww[2] - 1;
+    layerData.in.pad(offsetY / 2, offsetX / 2, 0);
     Tensor& out = layerData.out;
     out.resize(iw[0] - offsetY, iw[1] - offsetX, ww[0]);
 
