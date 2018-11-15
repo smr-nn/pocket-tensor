@@ -26,7 +26,7 @@ endif()
 # (https://stackoverflow.com/questions/5088460/flags-to-enable-thorough-and-verbose-g-warnings):
 if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGXX)
     add_definitions("-Wall -Wextra -Wshadow -Wnon-virtual-dtor -Wcast-align -Wcast-qual -Wunused
-	-Woverloaded-virtual -Wpedantic -Wdouble-promotion -Wformat=2 -Wfloat-equal -Wpointer-arith
+	-Woverloaded-virtual -Wdouble-promotion -Wformat=2 -Wfloat-equal -Wpointer-arith
 	-Wwrite-strings -Wswitch-enum -Wunreachable-code -Winit-self -Wuninitialized
 	-Wno-unused-result -Wctor-dtor-privacy -Wdisabled-optimization -Wmissing-declarations
         -Wredundant-decls -Wno-unused")
