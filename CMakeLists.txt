@@ -45,7 +45,7 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGXX)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Android")
         # See documentation
     else()
-        add_definitions("-march=core2 -mssse3 -msse4.1")
+        add_definitions("-march=core2 -mavx")
 
         if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
             add_definitions("-mfpu=neon")
