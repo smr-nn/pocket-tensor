@@ -9,7 +9,6 @@
 
 #include <array>
 #include "pt_parser.h"
-#include "pt_dispatcher.h"
 #include "pt_layer_data.h"
 #include "pt_max.h"
 
@@ -21,82 +20,44 @@ namespace
     template<class MaxType>
     void maxImpl(int poolSizeY, int poolSizeX, LayerData& layerData)
     {
-        struct Task
+        const Tensor& in = layerData.in;
+        Tensor& out = layerData.out;
+
+        const auto& iw = in.getDims();
+        const auto& ow = out.getDims();
+        auto inIncY2 = int(iw[2] * iw[1]);
+        auto inIncY = inIncY2 * poolSizeY;
+        auto inIncX2 = int(iw[2]);
+        auto inIncX = inIncX2 * poolSizeX;
+        auto outInc2 = int(iw[2] * ow[1]);
+        auto outInc = outInc2 * int(ow[0]);
+
+        auto inData = in.getData().data();
+        auto outData = const_cast<Tensor::Type*>(out.getData().data());
+        MaxType max;
+
+        int its = outInc / outInc2;
+        int taskEnd = its;
+
+        for(auto outIt = outData, outEnd = outData + (taskEnd * outInc2);
+            outIt != outEnd; outIt += outInc2)
         {
-            int poolSizeY;
-            int poolSizeX;
-            LayerData* layerData;
-            int threads;
-            int taskId;
+            auto inIt = inData;
+            inData += inIncY;
 
-            void operator()() noexcept
+            for(auto outIt2 = outIt, outEnd2 = outIt + outInc2; outIt2 != outEnd2; outIt2 += inIncX2)
             {
-                const Tensor& in = layerData->in;
-                Tensor& out = layerData->out;
-
-                const auto& iw = in.getDims();
-                const auto& ow = out.getDims();
-                auto inIncY2 = int(iw[2] * iw[1]);
-                auto inIncY = inIncY2 * poolSizeY;
-                auto inIncX2 = int(iw[2]);
-                auto inIncX = inIncX2 * poolSizeX;
-                auto outInc2 = int(iw[2] * ow[1]);
-                auto outInc = outInc2 * int(ow[0]);
-
-                auto inData = in.getData().data();
-                auto outData = const_cast<Tensor::Type*>(out.getData().data());
-                MaxType max;
-
-                int its = outInc / outInc2;
-                int taskIts = its / threads;
-                int taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
+                for(auto inIt2 = inIt, inEnd2 = inIt + inIncY; inIt2 != inEnd2; inIt2 += inIncY2)
                 {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                inData += taskIts * taskId * inIncY;
-
-                for(auto outIt = outData + (taskBegin * outInc2), outEnd = outData + (taskEnd * outInc2);
-                    outIt != outEnd; outIt += outInc2)
-                {
-                    auto inIt = inData;
-                    inData += inIncY;
-
-                    for(auto outIt2 = outIt, outEnd2 = outIt + outInc2; outIt2 != outEnd2; outIt2 += inIncX2)
+                    for(auto inIt3 = inIt2, inEnd3 = inIt2 + inIncX; inIt3 != inEnd3; inIt3 += inIncX2)
                     {
-                        for(auto inIt2 = inIt, inEnd2 = inIt + inIncY; inIt2 != inEnd2; inIt2 += inIncY2)
-                        {
-                            for(auto inIt3 = inIt2, inEnd3 = inIt2 + inIncX; inIt3 != inEnd3; inIt3 += inIncX2)
-                            {
-                                max(&*inIt3, &*outIt2, inIncX2);
-                            }
-                        }
-
-                        inIt += inIncX;
+                        max(&*inIt3, &*outIt2, inIncX2);
                     }
                 }
+
+                inIt += inIncX;
             }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        Dispatcher& dispatcher = layerData.dispatcher;
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ poolSizeY, poolSizeX, &layerData, threads, taskId };
-            dispatcher.add([&task]{ task(); });
         }
-
-        dispatcher.join();
     }
 }
 
@@ -137,15 +98,13 @@ bool MaxPooling2DLayer::apply(LayerData& layerData) const
     out.resize(iw[0] / std::size_t(_poolSizeY), iw[1] / std::size_t(_poolSizeX), iw[2]);
     out.fill(-std::numeric_limits<Tensor::Type>::infinity());
 
-    Dispatcher& dispatcher = layerData.dispatcher;
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(iw[2]) / threads;
+    auto tensorSize = int(iw[2]);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
         maxImpl<VectorMax>(_poolSizeY, _poolSizeX, layerData);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
         maxImpl<VectorMax>(_poolSizeY, _poolSizeX, layerData);
     }

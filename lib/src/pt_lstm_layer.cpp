@@ -8,7 +8,6 @@
 #include "pt_lstm_layer.h"
 
 #include "pt_parser.h"
-#include "pt_dispatcher.h"
 #include "pt_layer_data.h"
 #include "pt_logger.h"
 
@@ -17,7 +16,6 @@ namespace pt
 
 struct LstmLayer::TempData
 {
-    Dispatcher dummyDispatcher;
     Tensor ht;
     Tensor ct;
     Tensor last;
@@ -29,8 +27,7 @@ struct LstmLayer::TempData
     Tensor tmp1;
     Tensor tmp2;
 
-    explicit TempData(std::size_t outDim) :
-        dummyDispatcher(1)
+    explicit TempData(std::size_t outDim)
     {
         ht.resize(1, outDim);
         ct.resize(1, outDim);
@@ -38,10 +35,10 @@ struct LstmLayer::TempData
 
     void dot(const Tensor& w, const Tensor& b, const Tensor& u, Tensor& out)
     {
-        inRow.dot(w, tmp1, dummyDispatcher);
-        tmp1.add(b, tmp2, dummyDispatcher);
-        ht.dot(u, tmp1, dummyDispatcher);
-        tmp2.add(tmp1, out, dummyDispatcher);
+        inRow.dot(w, tmp1);
+        tmp1.add(b, tmp2);
+        ht.dot(u, tmp1);
+        tmp2.add(tmp1, out);
     }
 };
 
@@ -258,19 +255,19 @@ void LstmLayer::_step(TempData& tempData, Tensor& out) const
 
     // join
 
-    tempData.f.multiply(tempData.ct, tempData.tmp1, tempData.dummyDispatcher);
+    tempData.f.multiply(tempData.ct, tempData.tmp1);
 
-    tempData.i.multiply(tempData.c, tempData.tmp2, tempData.dummyDispatcher);
+    tempData.i.multiply(tempData.c, tempData.tmp2);
 
     // join
     // seq
 
-    tempData.tmp1.add(tempData.tmp2, tempData.ct, tempData.dummyDispatcher);
+    tempData.tmp1.add(tempData.tmp2, tempData.ct);
 
     tempData.ct.copyTo(tempData.c);
     _activation->apply(tempData.c);
 
-    tempData.o.multiply(tempData.c, tempData.ht, tempData.dummyDispatcher);
+    tempData.o.multiply(tempData.c, tempData.ht);
     tempData.ht.copyTo(out);
 }
 

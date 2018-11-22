@@ -8,7 +8,6 @@
 #include "pt_conv_2d_layer.h"
 
 #include <array>
-#include "pt_dispatcher.h"
 #include "pt_layer_data.h"
 #include "pt_multiply_add.h"
 #include "pt_logger.h"
@@ -21,91 +20,53 @@ namespace
     template<class MultiplyAddType>
     void multiplyAddImpl(const Tensor& weights, const Tensor& biases, LayerData& layerData)
     {
-        struct Task
+        const Tensor& in = layerData.in;
+        Tensor& out = layerData.out;
+
+        const auto& iw = in.getDims();
+        const auto& ww = weights.getDims();
+        const auto& ow = out.getDims();
+        auto outInc = int(ow[2]);
+        auto wSize = int(ww[0] * ww[1] * ww[2] * ww[3]);
+        auto wInc = int(ww[1] * ww[2] * ww[3]);
+        auto wInc2 = int(ww[2] * ww[3]);
+
+        auto tx = int(ow[1]);
+        auto ty = int(ow[0]);
+        auto inIncX = int(ww[3]);
+        auto inIncY = int(ww[3] * iw[1]);
+
+        auto inBegin = in.getData().data();
+        auto outBegin = const_cast<Tensor::Type*>(out.getData().data());
+        auto wBegin = weights.getData().data();
+        auto bBegin = biases.getData().data();
+        MultiplyAddType multiplyAdd;
+
+
+        for(int y = 0; y != ty; ++y)
         {
-            const Tensor* weights;
-            const Tensor* biases;
-            LayerData* layerData;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
+            for(int x = 0; x != tx; ++x)
             {
-                const Tensor& in = layerData->in;
-                Tensor& out = layerData->out;
 
-                const auto& iw = in.getDims();
-                const auto& ww = weights->getDims();
-                const auto& ow = out.getDims();
-                auto outInc = int(ow[2]);
-                auto wSize = int(ww[0] * ww[1] * ww[2] * ww[3]);
-                auto wInc = int(ww[1] * ww[2] * ww[3]);
-                auto wInc2 = int(ww[2] * ww[3]);
-
-                auto tx = int(ow[1]);
-                auto ty = int(ow[0]);
-                auto inIncX = int(ww[3]);
-                auto inIncY = int(ww[3] * iw[1]);
-
-                auto inBegin = in.getData().data();
-                auto outBegin = const_cast<Tensor::Type*>(out.getData().data());
-                auto wBegin = weights->getData().data();
-                auto bBegin = biases->getData().data();
-                MultiplyAddType multiplyAdd;
-
-                int its = ty;
-                int taskIts = its / threads;
-                int taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
+                auto inIt = inBegin + y * inIncY + x * inIncX;
+                auto outIt = outBegin + y * tx * outInc + x * outInc;
+                auto bIt = bBegin;
+                for(auto wIt = wBegin, wEnd = wBegin + wSize; wIt != wEnd; wIt += wInc)
                 {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
+                    auto inIt2 = inIt;
+                    *outIt = *bIt;
 
-                for(int y = taskBegin; y != taskEnd; ++y)
-                {
-                    for(int x = 0; x != tx; ++x)
+                    for(auto wIt2 = wIt, wEnd2 = wIt + wInc; wIt2 != wEnd2; wIt2 += wInc2)
                     {
-
-                        auto inIt = inBegin + y * inIncY + x * inIncX;
-                        auto outIt = outBegin + y * tx * outInc + x * outInc;
-                        auto bIt = bBegin;
-                        for(auto wIt = wBegin, wEnd = wBegin + wSize; wIt != wEnd; wIt += wInc)
-                        {
-                            auto inIt2 = inIt;
-                            *outIt = *bIt;
-
-                            for(auto wIt2 = wIt, wEnd2 = wIt + wInc; wIt2 != wEnd2; wIt2 += wInc2)
-                            {
-                                *outIt += multiplyAdd(&*inIt2, &*wIt2, wInc2);
-                                inIt2 += inIncY;
-                            }
-
-                            ++outIt;
-                            ++bIt;
-                        }
+                        *outIt += multiplyAdd(&*inIt2, &*wIt2, wInc2);
+                        inIt2 += inIncY;
                     }
+
+                    ++outIt;
+                    ++bIt;
                 }
             }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        Dispatcher& dispatcher = layerData.dispatcher;
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &weights, &biases, &layerData, threads, taskId };
-            dispatcher.add([&task]{ task(); });
         }
-
-        dispatcher.join();
     }
 }
 
@@ -167,14 +128,13 @@ bool Conv2DLayer::apply(LayerData& layerData) const
     Tensor& out = layerData.out;
     out.resize(iw[0] - offsetY, iw[1] - offsetX, ww[0]);
 
-    auto threads = int(layerData.dispatcher.threads());
-    auto threadSize = int(ww[2] * ww[3]) / threads;
+    auto tensorSize = int(ww[2] * ww[3]);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
         multiplyAddImpl<Vector2MultiplyAdd>(_weights, _biases, layerData);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
         multiplyAddImpl<VectorMultiplyAdd>(_weights, _biases, layerData);
     }

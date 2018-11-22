@@ -16,7 +16,6 @@ namespace pt
 {
 
 class Tensor;
-class Dispatcher;
 
 class Model
 {
@@ -27,8 +26,6 @@ public:
     static std::unique_ptr<Model> create(std::istream& stream);
 
     bool predict(Tensor in, Tensor& out) const;
-
-    bool predict(Dispatcher& dispatcher, Tensor in, Tensor& out) const;
 
     const Config& getConfig() const noexcept
     {

@@ -9,7 +9,6 @@
 
 #include <array>
 #include "pt_parser.h"
-#include "pt_dispatcher.h"
 #include "pt_layer_data.h"
 #include "pt_max.h"
 
@@ -20,65 +19,29 @@ namespace
 {
     void maxImpl(LayerData& layerData)
     {
-        struct Task
+        const Tensor& in = layerData.in;
+        Tensor& out = layerData.out;
+
+        const auto& iw = in.getDims();
+        const auto& ow = out.getDims();
+
+        auto inData = in.getData().data();
+        auto outData = const_cast<Tensor::Type*>(out.getData().data());
+
+        size_t its = ow[2];
+
+        for (std::size_t z = 0; z < its; z++ )
         {
-            LayerData* layerData;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
+            Tensor::Type val = std::numeric_limits<Tensor::Type>::lowest();
+            for (std::size_t x = 0; x < iw[0]; ++x)
             {
-                const Tensor& in = layerData->in;
-                Tensor& out = layerData->out;
-
-                const auto& iw = in.getDims();
-                const auto& ow = out.getDims();
-
-                auto inData = in.getData().data();
-                auto outData = const_cast<Tensor::Type*>(out.getData().data());
-
-                int its = ow[2];
-                int taskIts = its / threads;
-                int taskBegin = taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
+                for (std::size_t y = 0; y < iw[1]; ++y)
                 {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                
-                for (std::size_t z = taskBegin; z < taskEnd; z++ )
-                {
-                    Tensor::Type val = std::numeric_limits<Tensor::Type>::lowest();
-                    for (std::size_t x = 0; x < iw[0]; ++x)
-                    {
-                        for (std::size_t y = 0; y < iw[1]; ++y)
-                        {
-                            val = std::max(val, in(x, y, z));
-                        }
-                    }
-                    out(0, 0, z) = val;
+                    val = std::max(val, in(x, y, z));
                 }
             }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        Dispatcher& dispatcher = layerData.dispatcher;
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &layerData, threads, taskId };
-            dispatcher.add([&task]{ task(); });
+            out(0, 0, z) = val;
         }
-
-        dispatcher.join();
     }
 }
 
@@ -103,10 +66,6 @@ bool GlobalMaxPooling2DLayer::apply(LayerData& layerData) const
     Tensor& out = layerData.out;
     out.resize(1, 1, iw[2]);
     out.fill(-std::numeric_limits<Tensor::Type>::infinity());
-
-    Dispatcher& dispatcher = layerData.dispatcher;
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(iw[2]) / threads;
 
     maxImpl(layerData);
     out.flatten();

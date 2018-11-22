@@ -53,7 +53,7 @@ bool BatchNormalizationLayer::apply(LayerData& layerData) const
         return false;
     }
 
-    in.fma(_weights, _biases, layerData.out, layerData.dispatcher);
+    in.fma(_weights, _biases, layerData.out);
     return true;
 }
 

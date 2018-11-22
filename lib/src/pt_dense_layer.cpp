@@ -8,7 +8,6 @@
 #include "pt_dense_layer.h"
 
 #include <array>
-#include "pt_dispatcher.h"
 #include "pt_layer_data.h"
 #include "pt_multiply_add.h"
 #include "pt_logger.h"
@@ -21,62 +20,24 @@ namespace
     template<class MultiplyAddType>
     void multiplyAddImpl(const Tensor& weights, LayerData& layerData) noexcept
     {
-        struct Task
+        const Tensor& in = layerData.in;
+        Tensor& out = layerData.out;
+
+        const auto& weightsDims = weights.getDims();
+        auto wInc = int(weightsDims[1]);
+        auto inIt = in.begin();
+        auto outIt = out.begin();
+        MultiplyAddType multiplyAdd;
+
+        auto weightsBegin = weights.begin();
+        int its = int(weights.end() - weightsBegin) / wInc;
+
+        for(auto wIt = weightsBegin, wEnd = weightsBegin + (its * wInc);
+            wIt != wEnd; wIt += wInc)
         {
-            const Tensor* weights;
-            LayerData* layerData;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
-            {
-                const Tensor& in = layerData->in;
-                Tensor& out = layerData->out;
-
-                const auto& weightsDims = weights->getDims();
-                auto wInc = int(weightsDims[1]);
-                auto inIt = in.begin();
-                auto outIt = out.begin();
-                MultiplyAddType multiplyAdd;
-
-                auto weightsBegin = weights->begin();
-                int its = int(weights->end() - weightsBegin) / wInc;
-                int taskIts = its / threads;
-                int taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
-                {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                outIt += taskIts * taskId;
-
-                for(auto wIt = weightsBegin + (taskBegin * wInc), wEnd = weightsBegin + (taskEnd * wInc);
-                    wIt != wEnd; wIt += wInc)
-                {
-                    *outIt += multiplyAdd(&*inIt, &*wIt, wInc);
-                    ++outIt;
-                }
-            }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        Dispatcher& dispatcher = layerData.dispatcher;
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &weights, &layerData, threads, taskId };
-            dispatcher.add([&task]{ task(); });
+            *outIt += multiplyAdd(&*inIt, &*wIt, wInc);
+            ++outIt;
         }
-
-        dispatcher.join();
     }
 }
 
@@ -135,14 +96,13 @@ bool DenseLayer::apply(LayerData& layerData) const
     Tensor& out = layerData.out;
     _biases.copyTo(out);
 
-    auto threads = int(layerData.dispatcher.threads());
-    auto threadSize = int(ww[1]) / threads;
+    auto tensorSize = int(ww[1]);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
         multiplyAddImpl<Vector2MultiplyAdd>(_weights, layerData);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
         multiplyAddImpl<VectorMultiplyAdd>(_weights, layerData);
     }

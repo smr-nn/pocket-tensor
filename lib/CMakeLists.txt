@@ -4,7 +4,6 @@ project(pocket-tensor)
 # Define sources:
 set(SOURCES
     src/pt_tensor.cpp
-    src/pt_dispatcher.cpp
     src/pt_layer.cpp
     src/pt_dense_layer.cpp
     src/pt_conv_1d_layer.cpp

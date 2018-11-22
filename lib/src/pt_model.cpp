@@ -10,7 +10,7 @@
 #include <string>
 #include <fstream>
 #include "pt_parser.h"
-#include "pt_dispatcher.h"
+
 #include "pt_layer_data.h"
 
 namespace pt
@@ -73,20 +73,13 @@ std::unique_ptr<Model> Model::create(std::istream& stream)
 
 bool Model::predict(Tensor in, Tensor& out) const
 {
-    Dispatcher dispatcher;
-
-    return predict(dispatcher, std::move(in), out);
-}
-
-bool Model::predict(Dispatcher& dispatcher, Tensor in, Tensor& out) const
-{
     if(! in.isValid())
     {
         PT_LOG_ERROR << "Input tensor is not valid" << std::endl;
         return false;
     }
 
-    LayerData layerData{ std::move(in), out, dispatcher, _config };
+    LayerData layerData{ std::move(in), out, _config };
     std::size_t layersCount = _layers.size();
 
     for(std::size_t i = 0; i != layersCount - 1; ++i)

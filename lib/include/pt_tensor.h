@@ -17,8 +17,6 @@
 namespace pt
 {
 
-class Dispatcher;
-
 class Tensor
 {
 
@@ -163,7 +161,7 @@ public:
 
     void resize(std::size_t i, std::size_t j, std::size_t k, std::size_t l);
 
-    void setData(DataVector data) noexcept
+    void setData(DataVector &&data) noexcept
     {
         PT_ASSERT(_data.size() == data.size());
 
@@ -192,39 +190,39 @@ public:
         return output;
     }
 
-    void add(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const;
+    void add(const Tensor& other, Tensor& out) const;
 
-    Tensor add(const Tensor& other, Dispatcher& dispatcher) const
+    Tensor add(const Tensor& other) const
     {
         Tensor output;
-        add(other, output, dispatcher);
+        add(other, output);
         return output;
     }
 
-    void multiply(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const;
+    void multiply(const Tensor& other, Tensor& out) const;
 
-    Tensor multiply(const Tensor& other, Dispatcher& dispatcher) const
+    Tensor multiply(const Tensor& other) const
     {
         Tensor output;
-        multiply(other, output, dispatcher);
+        multiply(other, output);
         return output;
     }
 
-    void dot(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const;
+    void dot(const Tensor& other, Tensor& out) const;
 
-    Tensor dot(const Tensor& other, Dispatcher& dispatcher) const
+    Tensor dot(const Tensor& other) const
     {
         Tensor output;
-        dot(other, output, dispatcher);
+        dot(other, output);
         return output;
     }
 
-    void fma(const Tensor& scale, const Tensor& bias, Tensor& out, Dispatcher& dispatcher) const;
+    void fma(const Tensor& scale, const Tensor& bias, Tensor& out) const;
 
-    Tensor fma(const Tensor& scale, const Tensor& bias, Dispatcher& dispatcher) const
+    Tensor fma(const Tensor& scale, const Tensor& bias) const
     {
         Tensor output;
-        fma(scale, bias, output, dispatcher);
+        fma(scale, bias, output);
         return output;
     }
 

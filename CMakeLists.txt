@@ -45,7 +45,7 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGXX)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Android")
         # See documentation
     else()
-        add_definitions("-march=native")
+        add_definitions("-march=core2 -mssse3 -msse4.1")
 
         if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
             add_definitions("-mfpu=neon")
@@ -54,6 +54,9 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGXX)
 elseif(MSVC)
     add_definitions("/arch:AVX")
 endif()
+
+
+SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
 
 # Define libsimdpp library path:
 set(PT_LIBSIMDPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/3rd_party/libsimdpp" CACHE STRING "libsimdpp library path")

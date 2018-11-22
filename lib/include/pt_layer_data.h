@@ -14,13 +14,11 @@ namespace pt
 {
 
 class Config;
-class Dispatcher;
 
 struct LayerData
 {
     Tensor in;
     Tensor& out;
-    Dispatcher& dispatcher;
     const Config& config;
 };
 

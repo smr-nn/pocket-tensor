@@ -13,7 +13,6 @@
 #include "pt_multiply.h"
 #include "pt_multiply_add.h"
 #include "pt_parser.h"
-#include "pt_dispatcher.h"
 
 namespace pt
 {
@@ -21,204 +20,50 @@ namespace pt
 namespace
 {
     template<class AddType>
-    void addImpl(const Tensor& in, Tensor& out, Dispatcher& dispatcher)
+    void addImpl(const Tensor& in, Tensor& out)
     {
-        struct Task
-        {
-            const Tensor* in;
-            Tensor* out;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
-            {
-                auto its = int(in->getSize());
-                auto taskIts = its / threads;
-                auto taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
-                {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                auto inBegin = in->begin() + taskBegin;
-                auto outBegin = out->begin() + taskBegin;
-                AddType()(&*inBegin, &*outBegin, taskEnd - taskBegin);
-            }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &in, &out, threads, taskId };
-            dispatcher.add([&task]{ task(); });
-        }
-
-        dispatcher.join();
+        AddType()(&*in.begin(), &*out.begin(), in.getSize());
     }
 
     template<class MultiplyType>
-    void multiplyImpl(const Tensor& in, Tensor& out, Dispatcher& dispatcher)
+    void multiplyImpl(const Tensor& in, Tensor& out)
     {
-        struct Task
-        {
-            const Tensor* in;
-            Tensor* out;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
-            {
-                auto its = int(in->getSize());
-                auto taskIts = its / threads;
-                auto taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
-                {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                auto inBegin = in->begin() + taskBegin;
-                auto outBegin = out->begin() + taskBegin;
-                MultiplyType()(&*inBegin, &*outBegin, taskEnd - taskBegin);
-            }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &in, &out, threads, taskId };
-            dispatcher.add([&task]{ task(); });
-        }
-
-        dispatcher.join();
+        MultiplyType()(&*in.begin(), &*out.begin(), in.getSize());
     }
 
     template<class MultiplyAddType>
-    void dotImpl(const Tensor& a, const Tensor& b, Tensor& out, Dispatcher& dispatcher)
+    void dotImpl(const Tensor& a, const Tensor& b, Tensor& out)
     {
-        struct Task
-        {
-            const Tensor* a;
-            const Tensor* b;
-            Tensor* out;
-            int threads;
-            int taskId;
+        auto outInc = int(out.getDims()[1]);
+        int its = int(out.end() - out.begin()) / outInc;
+        int taskIts = its;
+        int taskEnd = its;
 
-            void operator()() noexcept
+        auto aIt = a.begin();
+        auto iInc = int(a.getDims()[1]);
+        auto bBegin = b.begin();
+        auto oBegin = out.begin();
+        MultiplyAddType multiplyAdd;
+
+        for(auto outIt = oBegin, outEnd = oBegin + (taskEnd * outInc);
+            outIt != outEnd; outIt += outInc)
+        {
+            auto bIt = bBegin;
+
+            for(auto outIt2 = outIt; outIt2 != outIt + outInc; ++outIt2)
             {
-                auto outInc = int(out->getDims()[1]);
-                int its = int(out->end() - out->begin()) / outInc;
-                int taskIts = its / threads;
-                int taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
-                {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                auto aIt = a->begin();
-                auto iInc = int(a->getDims()[1]);
-                auto bBegin = b->begin();
-                auto oBegin = out->begin();
-                MultiplyAddType multiplyAdd;
-                aIt += taskIts * taskId * iInc;
-
-                for(auto outIt = oBegin + (taskBegin * outInc), outEnd = oBegin + (taskEnd * outInc);
-                    outIt != outEnd; outIt += outInc)
-                {
-                    auto bIt = bBegin;
-
-                    for(auto outIt2 = outIt; outIt2 != outIt + outInc; ++outIt2)
-                    {
-                        *outIt2 = multiplyAdd(&*aIt, &*bIt, iInc);
-                        bIt += iInc;
-                    }
-
-                    aIt += iInc;
-                }
+                *outIt2 = multiplyAdd(&*aIt, &*bIt, iInc);
+                bIt += iInc;
             }
-        };
 
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &a, &b, &out, threads, taskId };
-            dispatcher.add([&task]{ task(); });
+            aIt += iInc;
         }
-
-        dispatcher.join();
     }
 
     template<class MultiplyAddType>
-    void multiplyAddImpl(const Tensor& scale, const Tensor& in, Tensor& out, Dispatcher& dispatcher)
+    void multiplyAddImpl(const Tensor& scale, const Tensor& in, Tensor& out)
     {
-        struct Task
-        {
-            const Tensor* scale;
-            const Tensor* in;
-            Tensor* out;
-            int threads;
-            int taskId;
-
-            void operator()() noexcept
-            {
-                auto its = int(in->getSize());
-                auto taskIts = its / threads;
-                auto taskBegin = taskIts * taskId;
-                int taskEnd;
-
-                if(taskId == threads - 1)
-                {
-                    taskEnd = its;
-                }
-                else
-                {
-                    taskEnd = taskBegin + taskIts;
-                }
-
-                auto inBegin = in->begin() + taskBegin;
-                auto scaleBegin = scale->begin() + taskBegin;
-                auto outBegin = out->begin() + taskBegin;
-                MultiplyAddType()(&*inBegin, &*scaleBegin, &*outBegin, taskEnd - taskBegin);
-            }
-        };
-
-        std::array<Task, PT_MAX_CPU_THREADS> tasks{};
-        auto threads = int(dispatcher.threads());
-
-        for(int taskId = 0; taskId != threads; ++taskId)
-        {
-            Task& task = tasks[std::size_t(taskId)];
-            task = Task{ &scale, &in, &out, threads, taskId };
-            dispatcher.add([&task]{ task(); });
-        }
-
-        dispatcher.join();
+        MultiplyAddType()(&*in.begin(), &*scale.begin(), &*out.begin(), in.getSize());
     }
 }
 
@@ -402,52 +247,50 @@ void Tensor::select(std::size_t row, Tensor& out) const
     out._dims.insert(out._dims.begin(), 1);
 }
 
-void Tensor::add(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const
+void Tensor::add(const Tensor& other, Tensor& out) const
 {
     PT_ASSERT(_dims == other._dims);
 
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(getSize()) / threads;
+    auto tensorSize = int(getSize());
     copyTo(out);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
-        addImpl<Vector2Add>(other, out, dispatcher);
+        addImpl<Vector2Add>(other, out);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
-        addImpl<VectorAdd>(other, out, dispatcher);
+        addImpl<VectorAdd>(other, out);
     }
     else
     {
-        addImpl<ScalarAdd>(other, out, dispatcher);
+        addImpl<ScalarAdd>(other, out);
     }
 }
 
-void Tensor::multiply(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const
+void Tensor::multiply(const Tensor& other, Tensor& out) const
 {
     PT_ASSERT(isValid());
     PT_ASSERT(_dims == other._dims);
 
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(getSize()) / threads;
+    auto tensorSize = int(getSize());
     copyTo(out);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
-        multiplyImpl<Vector2Multiply>(other, out, dispatcher);
+        multiplyImpl<Vector2Multiply>(other, out);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
-        multiplyImpl<VectorMultiply>(other, out, dispatcher);
+        multiplyImpl<VectorMultiply>(other, out);
     }
     else
     {
-        multiplyImpl<ScalarMultiply>(other, out, dispatcher);
+        multiplyImpl<ScalarMultiply>(other, out);
     }
 }
 
-void Tensor::dot(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const
+void Tensor::dot(const Tensor& other, Tensor& out) const
 {
     PT_ASSERT(_dims.size() == 2);
     PT_ASSERT(other._dims.size() == 2);
@@ -455,43 +298,41 @@ void Tensor::dot(const Tensor& other, Tensor& out, Dispatcher& dispatcher) const
 
     out.resize(_dims[0], other._dims[0]);
 
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(_dims[1]) / threads;
+    auto tensorSize = int(_dims[1]);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
-        dotImpl<Vector2MultiplyAdd>(*this, other, out, dispatcher);
+        dotImpl<Vector2MultiplyAdd>(*this, other, out);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
-        dotImpl<VectorMultiplyAdd>(*this, other, out, dispatcher);
+        dotImpl<VectorMultiplyAdd>(*this, other, out);
     }
     else
     {
-        dotImpl<ScalarMultiplyAdd>(*this, other, out, dispatcher);
+        dotImpl<ScalarMultiplyAdd>(*this, other, out);
     }
 }
 
-void Tensor::fma(const Tensor& scale, const Tensor& bias, Tensor& out, Dispatcher& dispatcher) const
+void Tensor::fma(const Tensor& scale, const Tensor& bias, Tensor& out) const
 {
     PT_ASSERT(_dims == scale._dims);
     PT_ASSERT(_dims == bias._dims);
 
-    auto threads = int(dispatcher.threads());
-    auto threadSize = int(getSize()) / threads;
+    auto tensorSize = int(getSize());
     bias.copyTo(out);
 
-    if(PT_LOOP_UNROLLING_ENABLE && threadSize && threadSize % (Tensor::VectorSize * 2) == 0)
+    if(PT_LOOP_UNROLLING_ENABLE && tensorSize && tensorSize % (Tensor::VectorSize * 2) == 0)
     {
-        multiplyAddImpl<Vector2MultiplyAdd>(scale, *this, out, dispatcher);
+        multiplyAddImpl<Vector2MultiplyAdd>(scale, *this, out);
     }
-    else if(threadSize && threadSize % Tensor::VectorSize == 0)
+    else if(tensorSize && tensorSize % Tensor::VectorSize == 0)
     {
-        multiplyAddImpl<VectorMultiplyAdd>(scale, *this, out, dispatcher);
+        multiplyAddImpl<VectorMultiplyAdd>(scale, *this, out);
     }
     else
     {
-        multiplyAddImpl<ScalarMultiplyAdd>(scale, *this, out, dispatcher);
+        multiplyAddImpl<ScalarMultiplyAdd>(scale, *this, out);
     }
 }
 
