@@ -81,7 +81,7 @@ public:
         }
 
         if (n > max_size()) {
-            throw std::length_error("aligned_allocator<T,A>::allocate() - Integer overflow.");
+            throw std::length_error(std::string("aligned_allocator<T,A>::allocate() - Integer overflow."));
         }
 
 
