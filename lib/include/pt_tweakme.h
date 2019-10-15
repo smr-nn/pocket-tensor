@@ -12,7 +12,9 @@
 #define PT_DOUBLE_ENABLE 0
 
 // Enable fused multiply add (faster, disabled by default):
-#define PT_FMADD_ENABLE 0
+#ifndef PT_FMADD_ENABLE
+#   define PT_FMADD_ENABLE 0
+#endif
 
 // Enable internal loop unrolling (enabled by default for GCC):
 #if defined(__GNUC__) || defined(__GNUG__)

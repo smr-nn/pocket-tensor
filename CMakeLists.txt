@@ -45,8 +45,13 @@ if(CMAKE_COMPILER_IS_GNUCC OR CMAKE_COMPILER_IS_CLANGXX)
     if(CMAKE_CXX_COMPILER_ID MATCHES "Android")
         # See documentation
     else()
-        add_definitions("-march=core2 -mavx")
-
+        add_definitions("-march=nehalem -mavx")
+        if(WANT_AVX512)
+            add_definitions("-mavx2 -mfma -mavx512f -mavx512ifma")
+            add_definitions("-DPT_FMADD_ENABLE=1")
+            add_definitions("-DSIMDPP_ARCH_X86_AVX512F=1")
+            message(STATUS "Enable AVX512+FMA")
+        endif()
         if(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm")
             add_definitions("-mfpu=neon")
         endif()
@@ -55,8 +60,10 @@ elseif(MSVC)
     add_definitions("/arch:AVX")
 endif()
 
-
-SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0 -fPIC")
+if(CMAKE_COMPILER_IS_GNUCC)
+    # smr specific compiler migration flags
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0 -fPIC")
+endif()
 
 # Define libsimdpp library path:
 set(PT_LIBSIMDPP_PATH "${CMAKE_CURRENT_SOURCE_DIR}/3rd_party/libsimdpp" CACHE STRING "libsimdpp library path")
